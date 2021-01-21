@@ -5,7 +5,7 @@ from src.evaluation.common import evaluate
 from src.explanation.common import explain, ExplainerType
 from src.confusion_matrix_feedback.confusion_matrix_feedback import compute_feedback
 from src.confusion_matrix_feedback.randomise_features import randomise_features
-from src.hyperparameter_optimisation.common import retrieve_best_model
+from src.hyperparameter_optimisation.common import retrieve_best_model, HyperoptTarget
 from src.labeling.common import LabelTypes
 from src.log.common import get_log
 from src.predictive_model.common import PredictionMethods
@@ -28,10 +28,11 @@ CONF = { #This contains the configuration for the run
     'prefix_length': 5,
     'padding': True,
     'feature_selection': EncodingType.SIMPLE.value,
-    'labeling_type': LabelTypes.ATTRIBUTE_STRING.value,
+    'labeling_type': LabelTypes.NEXT_ACTIVITY.value,
     'predictive_model': PredictionMethods.RANDOM_FOREST.value,
     'explanator': ExplainerType.SHAP.value,
     'hyperparameter_optimisation': True,
+    'hyperparameter_optimisation_target': HyperoptTarget.F1.value,
     'hyperparameter_optimisation_epochs': 3
 }
 
@@ -56,7 +57,8 @@ predictive_model = PredictiveModel(CONF['predictive_model'], train_df, validate_
 predictive_model.model, predictive_model.config = retrieve_best_model(
     predictive_model,
     CONF['predictive_model'],
-    max_evaluations=CONF['hyperparameter_optimisation_epochs']
+    max_evaluations=CONF['hyperparameter_optimisation_epochs'],
+    target=CONF['hyperparameter_optimisation_target']
 )
 
 logger.debug('EVALUATE PREDICTIVE MODEL')
@@ -82,7 +84,8 @@ predictive_model = PredictiveModel(CONF['predictive_model'], shuffled_train_df, 
 predictive_model.model, predictive_model.config = retrieve_best_model(
     predictive_model,
     CONF['predictive_model'],
-    max_evaluations=CONF['hyperparameter_optimisation_epochs']
+    max_evaluations=CONF['hyperparameter_optimisation_epochs'],
+    target=CONF['hyperparameter_optimisation_target']
 )
 
 logger.debug('RETRAIN-- EVALUATE PREDICTIVE MODEL')
