@@ -24,7 +24,7 @@ def _trace_to_row(trace: Trace, prefix_length: int, padding: bool = True, labeli
     trace_row = [trace.attributes['concept:name']]
     trace_row += _trace_prefixes(trace, prefix_length)
     if padding:
-        trace_row += [0 for _ in range(len(trace_row), prefix_length)]
+        trace_row += [0 for _ in range(len(trace_row), prefix_length + 1)]
     trace_row += [ add_label_column(trace, labeling_type, prefix_length) ]
     return trace_row
 

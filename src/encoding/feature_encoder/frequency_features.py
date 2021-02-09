@@ -46,7 +46,7 @@ def _trace_to_row(trace: Trace, prefix_length: int, columns: list, padding: bool
                 'concept:name': '0',
                 'time:timestamp': trace[len(trace)] + timedelta(hours=i)
             })
-            for i in range(prefix_length - len(trace) - 1)
+            for i in range(len(trace), prefix_length + 1)
         ]
 
     occurences = Counter([
