@@ -32,8 +32,9 @@ def _get_explanation(explainer, target_df, encoder):
             np.column_stack((
                 target_df.columns[1:-1],
                 encoder.decode_row(row)[1:-1],
-                explainer.shap_values(drop_columns(row.to_frame(0).T))[0].T
-            )).tolist()
-        for _, row in target_df.iterrows()
+                explainer.shap_values(drop_columns(row.to_frame(0).T))[row['label'] - 1].T  # list(row['label'])[0]
+            )).tolist()                                                                     # is the one vs all
+        for _, row in target_df.iterrows()                                                  # method!
+        if row['label'] is not '0'
     }
 

@@ -12,13 +12,16 @@ def compute_feedback(explanations, predictive_model, test_df, encoder, top_k=Non
 
     confusion_matrix = _retrieve_confusion_matrix_ids(trace_ids, predicted, actual, encoder)
 
-    filtered_explanations = _filter_explanations(explanations, confusion_matrix)
+    filtered_explanations = _filter_explanations(explanations, threshold=13)
 
     frequent_patterns = _mine_frequent_patterns(confusion_matrix, filtered_explanations)
 
     feedback = {
-        'true': _subtract_patterns(frequent_patterns['fp'], frequent_patterns['tp']),
-        'false': _subtract_patterns(frequent_patterns['fn'], frequent_patterns['tn'])
+        classes: _subtract_patterns(
+            sum([frequent_patterns[classes][cl] for cl in confusion_matrix.keys()], []),
+            frequent_patterns[classes][classes]
+        )
+        for classes in confusion_matrix.keys()
     }
 
     if top_k is not None:
@@ -28,7 +31,7 @@ def compute_feedback(explanations, predictive_model, test_df, encoder, top_k=Non
     return feedback
 
 
-def _retrieve_confusion_matrix_ids(trace_ids, predicted, actual, encoder) -> dict:
+def _retrieve_confusion_matrix_ids(trace_ids, actual, predicted, encoder) -> dict:
     decoded_predicted = encoder.decode_column(predicted, 'label')
     decoded_actual = encoder.decode_column(actual, 'label')
     elements = np.column_stack((
@@ -37,69 +40,51 @@ def _retrieve_confusion_matrix_ids(trace_ids, predicted, actual, encoder) -> dic
         decoded_actual
     )).tolist()
 
-    tp = {
-        trace_id
-        for trace_id, predicted, actual in elements
-        if actual == 'true' and predicted == 'true'
-    }
-    tn = {
-        trace_id
-        for trace_id, predicted, actual in elements
-        if actual == 'false' and predicted == 'false'
-    }
-    fp = {
-        trace_id
-        for trace_id, predicted, actual in elements
-        if actual == 'false' and predicted == 'true'
-    }
-    fn = {
-        trace_id
-        for trace_id, predicted, actual in elements
-        if actual == 'true' and predicted == 'false'
-    }
+    # matrix format is (actual, predicted)
+    confusion_matrix = {}
+    classes = list(encoder.get_values('label')[0])
+    for act in classes:
+        confusion_matrix[act] = {}
+        for pred in classes:
+            confusion_matrix[act][pred] = {
+                trace_id
+                for trace_id, predicted, actual in elements
+                if actual == act and predicted == pred
+            }
+
+    return confusion_matrix
+
+
+def _filter_explanations(explanations, threshold=None):
+    if threshold is None:
+        threshold = min(13, int(max(len(explanations[tid]) for tid in explanations) * 10 / 100) + 1)
     return {
-        'tp': tp,
-        'tn': tn,
-        'fp': fp,
-        'fn': fn
+        trace_id:
+            sorted(explanations[trace_id], key=lambda x: x[2], reverse=True)[:threshold]
+        for trace_id in explanations
     }
-
-
-def _filter_explanations(explanations, confusion_matrix, thresholds=None):
-    true = list(confusion_matrix['tp']) + list(confusion_matrix['fp'])
-    false = list(confusion_matrix['tn']) + list(confusion_matrix['fn'])
-
-    if thresholds is None:
-        thresholds = {
-            'true': np.mean([ feature[2] for tid in true for feature in explanations[tid] if feature[2] > 0 ]),
-            'false': np.mean([ feature[2] for tid in false for feature in explanations[tid] if feature[2] < 0 ])
-        }
-
-    filtered_explanations = {}
-    for trace_id in explanations:
-        filtered_explanations[trace_id] = []
-        for feature_name, value, importance in explanations[trace_id]:
-            if trace_id in true and importance > thresholds['true']:  # this becomes a for each in multiclass
-                filtered_explanations[trace_id] += [ (feature_name, value, importance) ]
-            elif trace_id in false and importance < thresholds['false']:
-                filtered_explanations[trace_id] += [ (feature_name, value, importance) ]
-
-    return filtered_explanations
 
 
 def _mine_frequent_patterns(confusion_matrix, filtered_explanations):
     mined_patterns = {}
     for element in confusion_matrix:
+        print(element, [  # print importances for debug
+            [
+                str(feature_name) + ' // ' + str(value) + ' // ' + str(importance)
+                for feature_name, value, importance in filtered_explanations[tid]
+            ]
+            for tid in confusion_matrix[element]
+        ])
         mined_patterns[element] = itemmining.relim(itemmining.get_relim_input([
             [
-                str(feature_name) + '//' + str(value) # + '_' + str(_tassellate_number(importance))
+                str(feature_name) + '//' + str(value)  # + '_' + str(_tassellate_number(importance))
                 for feature_name, value, importance in filtered_explanations[tid]
             ]
             for tid in confusion_matrix[element]
         ]), min_support=2)
         mined_patterns[element] = sorted(
             [
-                ([ el.split('//') for el in list(key) ], mined_patterns[element][key])
+                ([el.split('//') for el in list(key)], mined_patterns[element][key])
                 for key in mined_patterns[element]
             ],
             key=lambda x: x[1],
