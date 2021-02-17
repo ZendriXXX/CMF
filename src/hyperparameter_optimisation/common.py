@@ -1,9 +1,16 @@
+from enum import Enum
+
 import hyperopt
 import numpy as np
 from hyperopt import Trials, hp, fmin
 from hyperopt.pyll import scope
 
 from src.predictive_model.common import PredictionMethods
+
+
+class HyperoptTarget(Enum):
+    AUC = 'auc'
+    F1 = 'f1_score'
 
 
 def _get_space(model_type) -> dict:
@@ -47,12 +54,18 @@ def _get_space(model_type) -> dict:
         raise Exception('unsupported model_type')
 
 
-def retrieve_best_model(predicitive_model, model_type, max_evaluations):
+def retrieve_best_model(predicitive_model, model_type, max_evaluations, target):
 
     space = _get_space(model_type)
     trials = Trials()
 
-    fmin(predicitive_model.train_and_evaluate_configuration, space, algo=hyperopt.tpe.suggest, max_evals=max_evaluations, trials=trials)
+    fmin(
+        lambda x: predicitive_model.train_and_evaluate_configuration(config=x, target=target),
+        space,
+        algo=hyperopt.tpe.suggest,
+        max_evals=max_evaluations,
+        trials=trials
+    )
     best_candidate = trials.best_trial['result']
     print('best_candidate[config] ==> ', best_candidate['config'])
 

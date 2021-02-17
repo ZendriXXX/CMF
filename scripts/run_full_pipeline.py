@@ -7,26 +7,13 @@ from src.evaluation.common import evaluate
 from src.explanation.common import explain, ExplainerType
 from src.confusion_matrix_feedback.confusion_matrix_feedback import compute_feedback
 from src.confusion_matrix_feedback.randomise_features import randomise_features
-from src.hyperparameter_optimisation.common import retrieve_best_model
+from src.hyperparameter_optimisation.common import retrieve_best_model, HyperoptTarget
 from src.labeling.common import LabelTypes
 from src.log.common import get_log
 from src.predictive_model.common import PredictionMethods
 from src.predictive_model.predictive_model import PredictiveModel, drop_columns
 
 logger = logging.getLogger(__name__)
-
-def some_analysis(test_df):
-    combinations = list(itertools.combinations(set(test_df.columns) - set(['trace_id', 'label']), 2))
-    correlation = []
-    for c1, c2 in combinations:
-        try:
-            correlation += [(c1, c2, test_df[c1].corr(test_df[c2]))]
-        except Exception as e:
-            print(e)
-
-    correlation = filter(lambda x: str(x[2]) is not 'nan', correlation)
-    correlation = sorted(correlation, key=lambda x: x[2])
-
 
 def dict_mean(dict_list):
     mean_dict = {
@@ -65,6 +52,7 @@ def run_full_pipeline(CONF=None):
             'threshold': 13,
             'top_k': 10,
             'hyperparameter_optimisation': True,
+            'hyperparameter_optimisation_target': HyperoptTarget.F1.value,
             'hyperparameter_optimisation_epochs': 100
         }
 
@@ -89,7 +77,8 @@ def run_full_pipeline(CONF=None):
     predictive_model.model, predictive_model.config = retrieve_best_model(
         predictive_model,
         CONF['predictive_model'],
-        max_evaluations=CONF['hyperparameter_optimisation_epochs']
+        max_evaluations=CONF['hyperparameter_optimisation_epochs'],
+        target=CONF['hyperparameter_optimisation_target']
     )
 
     logger.debug('EVALUATE PREDICTIVE MODEL')
@@ -107,7 +96,6 @@ def run_full_pipeline(CONF=None):
         predictive_model,
         feedback_df,
         encoder,
-        threshold=min(CONF['threshold'], CONF['prefix_length'] -1 ),
         top_k=CONF['top_k']
     )
 
@@ -133,7 +121,8 @@ def run_full_pipeline(CONF=None):
                 predictive_model.model, predictive_model.config = retrieve_best_model(
                     predictive_model,
                     CONF['predictive_model'],
-                    max_evaluations=CONF['hyperparameter_optimisation_epochs']
+                    max_evaluations=CONF['hyperparameter_optimisation_epochs'],
+                    target=CONF['hyperparameter_optimisation_target']
                 )
 
                 logger.debug('RETRAIN-- EVALUATE PREDICTIVE MODEL')

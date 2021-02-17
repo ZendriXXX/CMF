@@ -47,3 +47,6 @@ class Encoder:
         else:
             decoded_column += list(column)
         return np.array(decoded_column)
+
+    def get_values(self, column_name):
+        return (self._label_dict[column_name].keys(), self._label_dict_decoder[column_name].keys())

@@ -17,8 +17,11 @@ def compute_feedback(explanations, predictive_model, feedback_df, encoder, thres
     frequent_patterns = _mine_frequent_patterns(confusion_matrix, filtered_explanations)
 
     feedback = {
-        'true': _subtract_patterns(frequent_patterns['fp'], frequent_patterns['tp']),
-        'false': _subtract_patterns(frequent_patterns['fn'], frequent_patterns['tn'])
+        classes: _subtract_patterns(
+            sum([frequent_patterns[classes][cl] for cl in confusion_matrix.keys()], []),
+            frequent_patterns[classes][classes]
+        )
+        for classes in confusion_matrix.keys()
     }
 
     feedback = {
@@ -33,7 +36,7 @@ def compute_feedback(explanations, predictive_model, feedback_df, encoder, thres
     return feedback
 
 
-def _retrieve_confusion_matrix_ids(trace_ids, predicted, actual, encoder) -> dict:
+def _retrieve_confusion_matrix_ids(trace_ids, actual, predicted, encoder) -> dict:
     decoded_predicted = encoder.decode_column(predicted, 'label')
     decoded_actual = encoder.decode_column(actual, 'label')
     elements = np.column_stack((
@@ -42,85 +45,29 @@ def _retrieve_confusion_matrix_ids(trace_ids, predicted, actual, encoder) -> dic
         decoded_actual
     )).tolist()
 
-    tp = {
-        trace_id
-        for trace_id, predicted, actual in elements
-        if actual == 'true' and predicted == 'true'
-    }
-    tn = {
-        trace_id
-        for trace_id, predicted, actual in elements
-        if actual == 'false' and predicted == 'false'
-    }
-    fp = {
-        trace_id
-        for trace_id, predicted, actual in elements
-        if actual == 'false' and predicted == 'true'
-    }
-    fn = {
-        trace_id
-        for trace_id, predicted, actual in elements
-        if actual == 'true' and predicted == 'false'
-    }
-    return {
-        'tp': tp,
-        'tn': tn,
-        'fp': fp,
-        'fn': fn
-    }
+    # matrix format is (actual, predicted)
+    confusion_matrix = {}
+    classes = list(encoder.get_values('label')[0])
+    for act in classes:
+        confusion_matrix[act] = {}
+        for pred in classes:
+            confusion_matrix[act][pred] = {
+                trace_id
+                for trace_id, predicted, actual in elements
+                if actual == act and predicted == pred
+            }
+
+    return confusion_matrix
 
 
-def _set_threshold(explanations, confusion_matrix, threshold=None):
-    trace_ids = {
-        'true': list(confusion_matrix['tp']) + list(confusion_matrix['fp']),
-        'false': list(confusion_matrix['tn']) + list(confusion_matrix['fn'])
-    }
-
-    values = {
-        'true': [feature[2] for tid in trace_ids['true'] for feature in explanations[tid] if feature[2] > 0],
-        'false': [-feature[2] for tid in trace_ids['false'] for feature in explanations[tid] if feature[2] < 0]
-    }
-
+def _filter_explanations(explanations, threshold=None):
     if threshold is None:
-        threshold = {classes: 0 for classes in trace_ids}
-
-    while(True):
-        filtered_explanations = _filter_explanations(explanations, confusion_matrix, threshold=threshold)
-        if any(len(filtered_explanations[trace]) > 20 for trace in filtered_explanations) :
-            for classes in trace_ids:
-                if any(len(filtered_explanations[trace]) > 20 for trace in trace_ids[classes]):
-                    threshold[classes] = np.mean(values[classes])
-                    values[classes] = list(filter(lambda x: x > threshold[classes], values[classes]))
-        else:
-            return threshold
-
-
-def _filter_explanations(explanations, confusion_matrix, threshold=None):
-    true = list(confusion_matrix['tp']) + list(confusion_matrix['fp'])
-    false = list(confusion_matrix['tn']) + list(confusion_matrix['fn'])
-
-    filtered_explanations = {}
-    for trace_id in explanations:
-        filtered_explanations[trace_id] = []
-
-        if threshold is None:
-            threshold = 12
-        else:
-            threshold = min(12, threshold)
-
-        thresholds = {}
-        if trace_id in true:
-            thresholds['true'] = sorted(explanations[trace_id], key=lambda x: x[2], reverse=True)[min(len(explanations[trace_id]), threshold)][2]
-        elif trace_id in false:
-            thresholds['false'] = - sorted(explanations[trace_id], key=lambda x: -x[2], reverse=True)[min(len(explanations[trace_id]), threshold)][2]
-
-        for feature_name, value, importance in explanations[trace_id]:
-            if trace_id in true and importance > thresholds['true']:  # this becomes a for each in multiclass
-                filtered_explanations[trace_id] += [ (feature_name, value, importance) ]
-            elif trace_id in false and -importance > thresholds['false']:
-                filtered_explanations[trace_id] += [ (feature_name, value, importance) ]
-
-    return filtered_explanations
+        threshold = min(13, int(max(len(explanations[tid]) for tid in explanations) * 10 / 100) + 1)
+    return {
+        trace_id:
+            sorted(explanations[trace_id], key=lambda x: x[2], reverse=True)[:threshold]
+        for trace_id in explanations
+    }
 
 
 def _mine_frequent_patterns(confusion_matrix, filtered_explanations):
@@ -128,14 +75,14 @@ def _mine_frequent_patterns(confusion_matrix, filtered_explanations):
     for element in confusion_matrix:
         mined_patterns[element] = itemmining.relim(itemmining.get_relim_input([
             [
-                str(feature_name) + '//' + str(value) # + '_' + str(_tassellate_number(importance))
+                str(feature_name) + '//' + str(value)  # + '_' + str(_tassellate_number(importance))
                 for feature_name, value, importance in filtered_explanations[tid]
             ]
             for tid in confusion_matrix[element]
         ]), min_support=2)
         mined_patterns[element] = sorted(
             [
-                ([ el.split('//') for el in list(key) ], mined_patterns[element][key])
+                ([el.split('//') for el in list(key)], mined_patterns[element][key])
                 for key in mined_patterns[element]
             ],
             key=lambda x: x[1],

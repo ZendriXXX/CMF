@@ -26,7 +26,7 @@ class PredictiveModel:
         self.full_validate_df = validate_df
         self.validate_df = drop_columns(validate_df)
 
-    def train_and_evaluate_configuration(self, config):
+    def train_and_evaluate_configuration(self, config, target):
         try:
             model = self._instantiate_model(config)
 
@@ -37,11 +37,11 @@ class PredictiveModel:
 
             actual = self.full_validate_df['label']
 
-            result = evaluate(actual, predicted, scores)
+            result = evaluate(actual, predicted, scores, loss=target)
 
             return {
                 'status': STATUS_OK,
-                'loss': - result['auc'], #we are using fmin for hyperopt
+                'loss': - result['loss'], #we are using fmin for hyperopt
                 'exception': None,
                 'config': config,
                 'model': model,
