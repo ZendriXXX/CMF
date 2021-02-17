@@ -24,7 +24,7 @@ def complex_features(log: EventLog, prefix_length, padding, labeling_type, featu
 
 def _get_global_trace_attributes(log: EventLog):
     # retrieves all traces in the log and returns their intersection
-    attributes = list(reduce(set.intersection, [set(trace._get_attributes().keys()) for trace in log]))
+    attributes = list(reduce(set.union, [set(trace._get_attributes().keys()) for trace in log]))
     trace_attributes = [attr for attr in attributes if attr not in ["concept:name", "time:timestamp", "label"]]
     return sorted(trace_attributes)
 
@@ -33,7 +33,7 @@ def _get_global_event_attributes(log):
     """Get log event attributes that are not name or time
     """
     # retrieves all events in the log and returns their intersection
-    attributes = list(reduce(set.intersection, [set(event._dict.keys()) for trace in log for event in trace]))
+    attributes = list(reduce(set.union, [set(event._dict.keys()) for trace in log for event in trace]))
     event_attributes = [attr for attr in attributes if attr not in ["concept:name", "time:timestamp"]]
     return sorted(event_attributes)
 

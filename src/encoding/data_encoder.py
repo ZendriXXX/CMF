@@ -3,7 +3,7 @@ import pandas as pd
 from pandas import DataFrame
 from sklearn.preprocessing import LabelEncoder
 
-PADDING_VALUE = '0'
+PADDING_VALUE = 0
 
 
 class Encoder:

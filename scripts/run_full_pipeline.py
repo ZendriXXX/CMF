@@ -1,5 +1,6 @@
 import itertools
 import logging
+from statistics import stdev, mean
 
 from src.encoding.common import get_encoded_df, EncodingType
 from src.evaluation.common import evaluate
@@ -28,9 +29,18 @@ def some_analysis(test_df):
 
 
 def dict_mean(dict_list):
-    mean_dict = {}
+    mean_dict = {
+        'avg': dict(),
+        'min': dict(),
+        'max': dict(),
+        'stdev': dict()
+    }
     for key in dict_list[0].keys():
-        mean_dict[key] = sum(d[key] for d in dict_list) / len(dict_list)
+        values = [d[key] for d in dict_list]
+        mean_dict['avg'][key] = mean(values)
+        mean_dict['min'][key] = min(values)
+        mean_dict['max'][key] = max(values)
+        mean_dict['stdev'][key] = stdev(values)
     return mean_dict
 
 
@@ -105,14 +115,15 @@ def run_full_pipeline(CONF=None):
     encoder.decode(train_df)
     encoder.decode(validate_df)
     returned_results = {}
+    feedback = {}
     for top_k_threshold in [1, 2]:
-        feedback = {classes: feedback_10[classes][:top_k_threshold] for classes in feedback_10}
+        feedback[top_k_threshold] = {classes: feedback_10[classes][:top_k_threshold] for classes in feedback_10}
 
         retrain_results = []
         for _ in range(10):
 
-            shuffled_train_df = randomise_features(feedback, train_df)
-            shuffled_validate_df = randomise_features(feedback, validate_df)
+            shuffled_train_df = randomise_features(feedback[top_k_threshold], train_df)
+            shuffled_validate_df = randomise_features(feedback[top_k_threshold], validate_df)
             encoder.encode(shuffled_train_df)
             encoder.encode(shuffled_validate_df)
 
@@ -133,8 +144,12 @@ def run_full_pipeline(CONF=None):
             except Exception as e:
                 pass
 
+        stats_retrain_results = dict_mean(retrain_results)
         returned_results[top_k_threshold] = {
-            'avg': dict_mean(retrain_results),
+            'avg': stats_retrain_results['avg'],
+            'min': stats_retrain_results['min'],
+            'max': stats_retrain_results['max'],
+            'stdev': stats_retrain_results['stdev'],
             'retrain_results': retrain_results
         }
 

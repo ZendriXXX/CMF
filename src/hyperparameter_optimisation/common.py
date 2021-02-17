@@ -54,5 +54,6 @@ def retrieve_best_model(predicitive_model, model_type, max_evaluations):
 
     fmin(predicitive_model.train_and_evaluate_configuration, space, algo=hyperopt.tpe.suggest, max_evals=max_evaluations, trials=trials)
     best_candidate = trials.best_trial['result']
+    print('best_candidate[config] ==> ', best_candidate['config'])
 
     return best_candidate['model'], best_candidate['config']
