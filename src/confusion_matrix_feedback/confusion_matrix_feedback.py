@@ -11,7 +11,7 @@ def compute_feedback(explanations, predictive_model, feedback_df, encoder, thres
 
     trace_ids = feedback_df['trace_id']
 
-    confusion_matrix = _retrieve_confusion_matrix_ids(trace_ids, predicted, actual, encoder)
+    confusion_matrix = _retrieve_confusion_matrix_ids(trace_ids, predicted=predicted, actual=actual, encoder=encoder)
 
     filtered_explanations = _filter_explanations(explanations, threshold)
 
@@ -37,7 +37,7 @@ def compute_feedback(explanations, predictive_model, feedback_df, encoder, thres
     return feedback
 
 
-def _retrieve_confusion_matrix_ids(trace_ids, actual, predicted, encoder) -> dict:
+def _retrieve_confusion_matrix_ids(trace_ids, predicted, actual, encoder) -> dict:
     decoded_predicted = encoder.decode_column(predicted, 'label')
     decoded_actual = encoder.decode_column(actual, 'label')
     elements = np.column_stack((
