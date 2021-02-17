@@ -4,21 +4,26 @@ from pymining import itemmining
 from src.predictive_model.predictive_model import drop_columns
 
 
-def compute_feedback(explanations, predictive_model, test_df, encoder, top_k=None):
-    predicted = predictive_model.model.predict(drop_columns(test_df))
-    actual = test_df['label']
+def compute_feedback(explanations, predictive_model, feedback_df, encoder, threshold=None, top_k=None):
+    predicted = predictive_model.model.predict(drop_columns(feedback_df))
+    actual = feedback_df['label']
 
-    trace_ids = test_df['trace_id']
+    trace_ids = feedback_df['trace_id']
 
     confusion_matrix = _retrieve_confusion_matrix_ids(trace_ids, predicted, actual, encoder)
 
-    filtered_explanations = _filter_explanations(explanations, confusion_matrix)
+    filtered_explanations = _filter_explanations(explanations, confusion_matrix, threshold=threshold)
 
     frequent_patterns = _mine_frequent_patterns(confusion_matrix, filtered_explanations)
 
     feedback = {
         'true': _subtract_patterns(frequent_patterns['fp'], frequent_patterns['tp']),
         'false': _subtract_patterns(frequent_patterns['fn'], frequent_patterns['tn'])
+    }
+
+    feedback = {
+        classes: sorted(feedback[classes], key=lambda x: x[1] * len(x[0]) / len(feedback[classes]), reverse=True)
+        for classes in feedback
     }
 
     if top_k is not None:
@@ -65,23 +70,54 @@ def _retrieve_confusion_matrix_ids(trace_ids, predicted, actual, encoder) -> dic
     }
 
 
-def _filter_explanations(explanations, confusion_matrix, thresholds=None):
+def _set_threshold(explanations, confusion_matrix, threshold=None):
+    trace_ids = {
+        'true': list(confusion_matrix['tp']) + list(confusion_matrix['fp']),
+        'false': list(confusion_matrix['tn']) + list(confusion_matrix['fn'])
+    }
+
+    values = {
+        'true': [feature[2] for tid in trace_ids['true'] for feature in explanations[tid] if feature[2] > 0],
+        'false': [-feature[2] for tid in trace_ids['false'] for feature in explanations[tid] if feature[2] < 0]
+    }
+
+    if threshold is None:
+        threshold = {classes: 0 for classes in trace_ids}
+
+    while(True):
+        filtered_explanations = _filter_explanations(explanations, confusion_matrix, threshold=threshold)
+        if any(len(filtered_explanations[trace]) > 20 for trace in filtered_explanations) :
+            for classes in trace_ids:
+                if any(len(filtered_explanations[trace]) > 20 for trace in trace_ids[classes]):
+                    threshold[classes] = np.mean(values[classes])
+                    values[classes] = list(filter(lambda x: x > threshold[classes], values[classes]))
+        else:
+            return threshold
+
+
+def _filter_explanations(explanations, confusion_matrix, threshold=None):
     true = list(confusion_matrix['tp']) + list(confusion_matrix['fp'])
     false = list(confusion_matrix['tn']) + list(confusion_matrix['fn'])
-
-    if thresholds is None:
-        thresholds = {
-            'true': np.mean([ feature[2] for tid in true for feature in explanations[tid] if feature[2] > 0 ]),
-            'false': np.mean([ feature[2] for tid in false for feature in explanations[tid] if feature[2] < 0 ])
-        }
 
     filtered_explanations = {}
     for trace_id in explanations:
         filtered_explanations[trace_id] = []
+
+        if threshold is None:
+            threshold = 12
+        else:
+            threshold = min(12, threshold)
+
+        thresholds = {}
+        if trace_id in true:
+            thresholds['true'] = sorted(explanations[trace_id], key=lambda x: x[2], reverse=True)[min(len(explanations[trace_id]), threshold)][2]
+        elif trace_id in false:
+            thresholds['false'] = - sorted(explanations[trace_id], key=lambda x: -x[2], reverse=True)[min(len(explanations[trace_id]), threshold)][2]
+
         for feature_name, value, importance in explanations[trace_id]:
             if trace_id in true and importance > thresholds['true']:  # this becomes a for each in multiclass
                 filtered_explanations[trace_id] += [ (feature_name, value, importance) ]
-            elif trace_id in false and importance < thresholds['false']:
+            elif trace_id in false and -importance > thresholds['false']:
                 filtered_explanations[trace_id] += [ (feature_name, value, importance) ]
 
     return filtered_explanations
@@ -116,10 +152,11 @@ def _tassellate_number(element):
 
 def _subtract_patterns(list1, list2):
 
-    difference = [el[0] for el in list1]
+    difference = list1
     for el, _ in list2:
-        if el in difference:
-            difference.remove(el)
+        if el in [e[0] for e in difference]:
+            index = [e[0] for e in difference].index(el)
+            difference.remove(difference[index])
 
     return difference
 
