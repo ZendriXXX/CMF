@@ -7,7 +7,7 @@ def randomise_features(feedback, train_df) -> DataFrame:
     randomised_df = train_df.copy()
 
     for classes in feedback:
-        for single_feedback in feedback[classes]:
+        for single_feedback, _ in feedback[classes]:
             target_columns = [column_name for column_name, _ in single_feedback]
 
             possible_values = {column: list(set(train_df[column].values)) for column in target_columns}
