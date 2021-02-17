@@ -21,6 +21,7 @@ setup(
         'functools',
         'sklearn',
         'shap',
+        'lime',
         'numpy',
         'enum',
         'hyperopt'
