@@ -5,10 +5,10 @@ from pandas import DataFrame
 from pm4py.objects.log.log import EventLog
 
 from src.encoding.data_encoder import Encoder
-# from src.encoding.feature_encoder.frequency_features import frequency_features
+from src.encoding.feature_encoder.frequency_features import frequency_features
 from src.encoding.feature_encoder.simple_features import simple_features
 from src.encoding.feature_encoder.complex_features import complex_features
-# from src.encoding.feature_encoder.declare_features.declare_features import declare_features
+from src.encoding.feature_encoder.declare_features.declare_features import declare_features
 
 logger = logging.getLogger(__name__)
 
