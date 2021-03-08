@@ -30,8 +30,8 @@ def _get_explanation(explainer, model, target_df, encoder):
     return {
         str(row['trace_id']):
             np.column_stack((
-                target_df.columns[1:-1],
-                encoder.decode_row(row)[1:-1],
+                drop_columns(target_df).columns,
+                encoder.decode_row(drop_columns(row.to_frame(0).T).squeeze()),
                 explainer.shap_values(
                     drop_columns(row.to_frame(0).T)
                 )[int(model.predict(drop_columns(row.to_frame().T))[0]) - 1].T  # list(row['predicted'])[0]
